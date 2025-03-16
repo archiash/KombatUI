@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation'
 import { AnimatePresence, motion } from 'framer-motion'
 import FrozenRoute from './FrozenRoute'
 
-const PageAnimatePresence = ({ children }) => {
+const PageAnimatePresence = ({ children }:{children: string}) => {
   const pathname = usePathname()
 
   return (
