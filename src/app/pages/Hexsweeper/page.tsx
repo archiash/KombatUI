@@ -1,26 +1,15 @@
 "use client";
-import { use, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
 import { Draggable } from "@/app/components/DND/Draggable";
-import { Droppable } from "@/app/components/DND/Droppable";
 import { DroppableHex } from "@/app/components/DND/DroppableHex";
-import { IoSend } from "react-icons/io5";
-import Hex from "@/app/components/Hex2";
 import { range } from "@/app/utils/Range";
 import { Minion1, Minion2, Minion3 } from "@/app/components/minion";
 import { useAppSelector } from "@/stores/hook";
 import {
   selectGame,
-  nextTurn,
-  receiveBudget,
-  setGridCellOwner,
   setOwnerGrid,
   setMinionGrid,
-  setMinionAmount,
-  setHexAmount,
-  setBudget,
-  setBuyableHex,
-  setGameState,
   setLeaderData,
   setTurn,
   setGameStream,
@@ -28,7 +17,7 @@ import {
   popGameStream,
 } from "@/stores/slices/gameSlice";
 import { Button_v5, Button_v6 } from "@/app/components/EButton";
-import { useMotionValue, animate, motion, steps } from "framer-motion";
+import { motion } from "framer-motion";
 import NumberFlow, { continuous } from "@number-flow/react";
 import { useDispatch } from "react-redux";
 import { TextFade } from "@/app/components/FadeUp";
@@ -36,7 +25,6 @@ import { Separator } from "@/app/components/Seperator";
 import {
   selectRoom,
   selectRoomMinion,
-  setMinions,
 } from "@/stores/slices/roomSlice";
 import { useWebSocket } from "@/hooks/useWebsocket";
 import { selectUser } from "@/stores/slices/userSlice";
