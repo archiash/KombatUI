@@ -430,11 +430,11 @@ export default function Home() {
                     row={row}
                     col={col}
                     key={`h${row}${col}`}
-                    clickFunc={clickCell(row, col)}
+                    //clickFunc={clickCell(row, col)}
                     bomb={hex[row - 1][col - 1]}
                     id={`drop_hex${col},${row}`}
-                    className="w-[100px] h-[87px] absolute"
-                    style={{ transform: `translateX(100px)` }}
+                    //className="w-[100px] h-[87px] absolute"
+                    //style={{ transform: `translateX(100px)` }}
                     buyableOverlay={isBuyableNow(row, col)}
                     onBuying={buyHexAt(row, col)}
                     minion={

@@ -1,14 +1,17 @@
-import React from "react";
-import { useDroppable } from "@dnd-kit/core";
+import React, { CSSProperties, ReactNode } from "react";
+import { UniqueIdentifier, useDroppable } from "@dnd-kit/core";
 import { useEffect, createRef, useState } from "react";
 
-export function DroppableHex(props) {
+export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:number, minion: ReactNode, bomb:String, x:number, y:number
+  ,buyableOverlay:boolean, border_color: string, border_up: boolean, border_down: boolean, border_downleft: boolean, border_downright: boolean, border_upleft: boolean, border_upright: boolean
+  , price : number ,onBuying: () => void
+}) {
   const { isOver, setNodeRef } = useDroppable({
     id: props.id,
     data: { row: props.row, col: props.col },
   });
   const [isHover, setHover] = useState(false);
-  const style = {
+  const style:CSSProperties = {
     transform: `translate(${props.x * 0.75 + props.col * 0  }px, ${
       (Math.sqrt(3) / 2) * props.y + 87 / 2 + props.row *0 
     }px)`,
@@ -20,7 +23,7 @@ export function DroppableHex(props) {
   const [strokeColor, setStrokeColor] = useState("white");
   const [textColor, setTextColor] = useState("fill-white");
 
-  const hexagonPoints = (radius) => {
+  const hexagonPoints = (radius:number) => {
     const halfWidth = (radius * Math.sqrt(3)) / 2;
     return `
       ${0},${halfWidth}
@@ -31,7 +34,7 @@ export function DroppableHex(props) {
       ${radius / 2},${0}`;
   };
 
-  const edgeList = (radius) => {
+  const edgeList = (radius:number) => {
     const halfWidth = (radius * Math.sqrt(3)) / 2;
     return [
       [0,halfWidth],
@@ -66,7 +69,7 @@ export function DroppableHex(props) {
     }
   }, [isHover, isOver]);
 
-  const calculateZIndex = (hover, col) => {
+  const calculateZIndex = (hover:boolean, col:string) => {
     let z = 0;
     if(col !== "#000a"){
       z += 20;
@@ -86,16 +89,19 @@ export function DroppableHex(props) {
     <div
       className={`w-[100px] h-[87px] absolute ${calculateZIndex(isHover || isOver, props.border_color)}`}
       style={style}
-      transform={` translate(${10 + props.x * 0.75},${
-        10 + (Math.sqrt(3) / 2) * props.y + 87 / 2
-      })`}
+      
+      //transform={` translate(${10 + props.x * 0.75},${
+      //  10 + (Math.sqrt(3) / 2) * props.y + 87 / 2
+      //})`}
     > 
-      <div className="absolute z-40 w-full h-full p-3 flex justify-center items-center">
+      <div className="absolute z-40 w-full h-full p-3 flex justify-center items-center"
+        ref={setNodeRef}
+      >
         <div style={{pointerEvents: "none", opacity: props.buyableOverlay ? 0.5 : 1}} className="w-full h-full flex justify-center items-center">{minion}</div>
         {props.buyableOverlay && <div className="z-50 absolute" style={{color : "#FFFFFF"}}>{`${props.price} $`}</div>}
       </div>
       <svg
-        ref={setNodeRef}
+        //ref={setNodeRef}
         style={{ pointerEvents: "none" }}
         className={`justify-center items-center w-[100px] h-[87px] absolute  ${strokeColor}`}
         key={`${props.x}${props.y}`}
