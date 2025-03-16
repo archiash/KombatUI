@@ -13,8 +13,9 @@ type ButtonProps = {
 export const Button_v5 = ({
   children,
   Icon = <IoSend size="20" />,
+  hoverClass = "bg-zinc-100",
   ...rest
-}: ButtonProps & { Icon: React.ReactNode }) => {
+}: ButtonProps & { Icon: React.ReactNode } & {hoverClass?: string}) => {
   return (
     <Button
       {...rest}
@@ -27,7 +28,7 @@ export const Button_v5 = ({
         rest.className,
       )}
     >
-      <span className="absolute inset-0 rounded-sm flex items-center justify-center size-full duration-700 ease-[cubic-bezier(0.50,0.20,0,1)] -translate-x-full group-hover:translate-x-0 bg-zinc-800 dark:bg-zinc-100 text-zinc-100 dark:text-zinc-800">
+      <span className={`absolute inset-0 rounded-sm flex items-center justify-center size-full duration-700 ease-[cubic-bezier(0.50,0.20,0,1)] -translate-x-full group-hover:translate-x-0 ${hoverClass} text-zinc-100 dark:text-zinc-800`}>
         {Icon}
       </span>
       <span className="absolute flex items-center justify-center w-full h-full transition-all duration-500 ease-out transform group-hover:translate-x-full ">

@@ -53,21 +53,20 @@ export const useWebSocket = () => {
         body: JSON.stringify(message),
       });
     } else {
-      console.log("No active WebSocket connection to disconnect.");
+      console.log("No active WebSocket connection to disconect.");
     }
   };
 
   const connect = () => {
     try {
       const stompClient = new Client({
-        //webSocketFactory: () => new SockJS(`${serverUrl}/ws`),
-        brokerURL: `ws://10.123.96.38:8080/ws`,
+        //webSocketFactory: () => new SockJS(`${serverUrl}/ws`i),
+        brokerURL: `ws://192.168.1.49:8080/ws`,
         onConnect: () => onConnected(stompClient),
         onDisconnect: () => disconnect(),
-        reconnectDelay: 5000,
+        disconnectHeaders: {"discon":"dicon"},
+        reconnectDelay: 2000,
       });
-
-      console.log("connected, session id: " + sessionId);
       stompClient.activate();
     } catch (e) {
       console.log(e);

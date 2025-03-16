@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import { DndContext } from "@dnd-kit/core";
 import { Draggable } from "@/app/components/DND/Draggable";
 import { Droppable } from "@/app/components/DND/Droppable";
@@ -14,20 +14,70 @@ import {
   nextTurn,
   receiveBudget,
   setGridCellOwner,
+  setOwnerGrid,
+  setMinionGrid,
+  setMinionAmount,
+  setHexAmount,
+  setBudget,
+  setBuyableHex,
+  setGameState,
+  setLeaderData,
+  setTurn,
+  setGameStream,
+  selectStream,
+  popGameStream,
 } from "@/stores/slices/gameSlice";
 import { Button_v5, Button_v6 } from "@/app/components/EButton";
-import { useMotionValue, animate, motion } from "framer-motion";
+import { useMotionValue, animate, motion, steps } from "framer-motion";
 import NumberFlow, { continuous } from "@number-flow/react";
 import { useDispatch } from "react-redux";
 import { TextFade } from "@/app/components/FadeUp";
 import { Separator } from "@/app/components/Seperator";
+import {
+  selectRoom,
+  selectRoomMinion,
+  setMinions,
+} from "@/stores/slices/roomSlice";
+import { useWebSocket } from "@/hooks/useWebsocket";
+import { selectUser } from "@/stores/slices/userSlice";
+import { Message, StompSubscription } from "@stomp/stompjs";
 
 export default function Home() {
   const cols = 8;
   const rows = 8;
 
+  const [speed, setSpeed] = useState<number>(1);
+
   const game = useAppSelector(selectGame);
   const dispatch = useDispatch();
+  const minions = useAppSelector(selectRoomMinion);
+  const { sendMessage, subscribe } = useWebSocket();
+  const room = useAppSelector(selectRoom);
+  const user = useAppSelector(selectUser);
+  const stream = useAppSelector(selectStream);
+
+  const [gameSub, setGameSub] = useState<StompSubscription>();
+  const [userSub, setUserSub] = useState<StompSubscription>();
+
+  const minionTypeToImageId = (type: string) => {
+    const m = minions.minions.find((m) => m.name === type);
+    if (m === undefined) return -1;
+    console.log(type, m.imageId);
+    return m.imageId;
+  };
+
+  const minionsImage = [
+    (col: string, scale: number) => <Minion1 col={col} scale={scale} />,
+    (col: string, scale: number) => <Minion2 col={col} scale={scale} />,
+    (col: string, scale: number) => <Minion3 col={col} scale={scale} />,
+  ];
+
+  const getMinionImage = (index: number) => {
+    if (index >= 0 && index < minionsImage.length) {
+      return minionsImage[index];
+    }
+    return (col: string, scale: number) => <></>;
+  };
 
   const getAdjacentPos = ({
     row,
@@ -58,19 +108,17 @@ export default function Home() {
 
   const owner = ({ row, col }: { row: number; col: number }) => {
     if (row < 0 || row > 7 || col < 0 || col > 7) return 0;
-    return game.grid[row][col];
+    if (game.grid[row][col] === room.leader1) return 1;
+    if (game.grid[row][col] === room.leader2) return 2;
+    return 0;
   };
 
-  const [gameState, setState] = useState<
-    "spawning" | "buying" | "executing" | "other" | "first_spawning"
-  >("first_spawning");
-
   const stateButton = () => {
-    if (gameState === "spawning") {
+    if (game.state === "spawning") {
       return "End Turn";
-    } else if (gameState === "buying") {
+    } else if (game.state === "buying") {
       return "Skip";
-    } else if (gameState === "first_spawning") {
+    } else if (game.state === "first_spawning") {
       return "Spawn First Minion";
     } else {
       return "";
@@ -78,11 +126,6 @@ export default function Home() {
   };
 
   const [onInfo, showInfo] = useState<number>(-1);
-
-  const [minionList, setMinionList] = useState<number[][]>(
-    range(0, 7).map((i) => range(0, 7).map((j) => -1))
-  );
-
   const availableMinion = [Minion1, Minion2, Minion3];
 
   const generateBomb = () => {
@@ -98,12 +141,78 @@ export default function Home() {
   };
   const [bomb, setBomb] = useState<boolean[][]>(generateBomb());
 
-  useEffect(() => {
+  /*   useEffect(() => {
     dispatch(setGridCellOwner({ row: 7, col: 7, owner: 1 }));
     dispatch(setGridCellOwner({ row: 7, col: 6, owner: 1 }));
     dispatch(setGridCellOwner({ row: 7, col: 5, owner: 1 }));
     dispatch(setGridCellOwner({ row: 6, col: 7, owner: 1 }));
     dispatch(setGridCellOwner({ row: 6, col: 6, owner: 1 }));
+  }, []); */
+
+  const patchUpdate = (data: any) => {
+    //dispatch(setMinions(data["minions"]))
+    dispatch(setOwnerGrid(data["owner"]));
+    dispatch(setMinionGrid(data["minionHexes"]));
+    dispatch(setTurn(data["turn"]));
+    if (user?.username !== undefined) {
+      const leaderData = data["leaders"][user?.username];
+      //console.log(leaderData)
+      dispatch(setLeaderData(leaderData));
+    }
+  };
+
+  const onReciveMessage = (payload: Message) => {
+    const payloadCommand = payload.headers["command"];
+    if (payloadCommand === "update") {
+      const data = JSON.parse(payload.body);
+      console.log(data);
+      //patchUpdate(data)
+    }
+    if (payloadCommand === "test") {
+      const data = JSON.parse(payload.body);
+      patchUpdate(data[0]);
+      if (data.length > 1) {
+        dispatch(setGameStream(data.slice(1)));
+      }
+      console.log(data);
+    }
+  };
+
+  useEffect(() => {
+    if (stream.length > 0) {
+      const data = setTimeout(() => {
+        patchUpdate(stream[0]);
+        dispatch(popGameStream());
+      }, 500 / speed);
+      return () => clearTimeout(data);
+    }
+  }, [stream]);
+
+  const onReciveUserMessage = (payload: Message) => {
+    const payloadCommand = payload.headers["command"];
+    if (payloadCommand === "init") {
+      const data = JSON.parse(payload.body);
+      console.log(data);
+      patchUpdate(data);
+    }
+    if (payloadCommand === "minionls") {
+      const data = JSON.parse(payload.body);
+      //dispatch(setMinions(data["minions"]))
+    }
+  };
+
+  useEffect(() => {
+    const data = setTimeout(() => {
+      const roomSub = subscribe(`/topic/game-${room.id}`, onReciveMessage);
+      const userSub = subscribe(
+        `/topic/user-${user?.username}`,
+        onReciveUserMessage
+      );
+      setGameSub(roomSub);
+      setUserSub(userSub);
+      sendMessage(`/game/start`, { roomId: room.id });
+    }, 0);
+    return () => clearTimeout(data);
   }, []);
 
   const generateHex = () => {
@@ -171,38 +280,104 @@ export default function Home() {
     if (active && over) {
       const row = over.data.current["row"] - 1;
       const col = over.data.current["col"] - 1;
-      if (game.grid[row][col] == 1) {
-        const minion = active.data.current["minion"];
+
+      if (game.grid[row][col] === user?.username) {
+        sendMessage("/game/spawn", {
+          row: row,
+          col: col,
+          roomId: room.id,
+          owner: user?.username,
+          minionType: minions.minions[active.data.current["minion"]].name,
+        });
+
+        /*         const minion = active.data.current["minion"];
         const ls = minionList.map((r, i) =>
           r.map((e, j) => (i == row && j == col ? minion : e))
         );
-        if (gameState === "first_spawning") {
+        if (game.state === "first_spawning") {
           setState("spawning");
         } else {
           setState("buying");
         }
-        setMinionList(ls);
+        setMinionList(ls); */
       }
     }
   }
 
   const nextState = () => {
-    if (gameState == "buying") {
-      setState("spawning");
-    } else if (gameState == "spawning") {
-      dispatch(nextTurn()),
-        dispatch(receiveBudget(game.settings["turn_budget"]));
-      setState("buying");
+    skipState();
+  };
+
+  const calculateBorderColor = (leader: number, buyable: boolean) => {
+    if (buyable) return calculateLeaderColor(user?.username);
+    if (leader === 1) return `#305CDE`;
+    if (leader === 2) return `#e55451`;
+    return "#000a";
+  };
+
+  const calculateLeaderColor = (leaderName: string | undefined) => {
+    if (leaderName === room.leader1) return `#305CDE`;
+    if (leaderName === room.leader2) return `#e55451`;
+    return "#fff";
+  };
+
+  const isDrawBorder = (
+    row: number,
+    col: number,
+    dir: "up" | "down" | "upleft" | "upright" | "downleft" | "downright"
+  ) => {
+    return (
+      owner({ row: row - 1, col: col - 1 }) !==
+      owner(
+        getAdjacentPos({
+          row: row - 1,
+          col: col - 1,
+          dir: dir,
+        })
+      )
+    );
+  };
+
+  const skipState = () => {
+    sendMessage("/game/skip", { roomId: room.id });
+  };
+
+  const isBuyableNow = (row: number, col: number) => {
+    if (game.state !== "buying") return false;
+    const found = game.buyableHexes.find(
+      (pos) => pos.col === col - 1 && pos.row === row - 1
+    );
+    return found !== undefined;
+  };
+
+  const buyHexAt = (row: number, col: number) => () => {
+    sendMessage("/game/buy", { row: row - 1, col: col - 1, roomId: room.id });
+  };
+
+  const changeSpeed = () => {
+    if (speed < 4) {
+      setSpeed(speed * 2);
+    }else{
+      setSpeed(1);
     }
   };
+
+  const speedButtonHoverText = () => {
+    if (speed < 4) {
+      return `x${speed * 2}`
+    }else{
+      return `x1`
+    }
+  }
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
       <div className="h-screen w-full flex flex-col">
         <div className="static h-screen w-full flex flex-row bg-[#2a2a2a99] items-center my-auto">
           <div className="w-[15%] text-[#bbb] pt-5 bg-[#00000088] h-[100%] flex flex-col">
+            <div className="text-center text-2xl">Turn</div>
             <NumberFlow
-              prefix="Turn: "
+              suffix={` / ${room.config["max_turns"]}`}
               value={game.turn}
               className="text-center text-[1.3rem]"
             ></NumberFlow>
@@ -224,65 +399,31 @@ export default function Home() {
               {range(1, cols).map((col) =>
                 range(1, rows).map((row) => (
                   <DroppableHex
+                    price={room.config["hex_purchase_cost"]}
+                    border_color={calculateBorderColor(
+                      owner({ row: row - 1, col: col - 1 }),
+                      isBuyableNow(row, col)
+                    )}
                     border_up={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "up",
-                        })
-                      )
+                      isDrawBorder(row, col, "up") || isBuyableNow(row, col)
                     }
                     border_down={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "down",
-                        })
-                      )
+                      isDrawBorder(row, col, "down") || isBuyableNow(row, col)
                     }
                     border_downleft={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "downleft",
-                        })
-                      )
+                      isDrawBorder(row, col, "downleft") ||
+                      isBuyableNow(row, col)
                     }
                     border_downright={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "downright",
-                        })
-                      )
+                      isDrawBorder(row, col, "downright") ||
+                      isBuyableNow(row, col)
                     }
                     border_upleft={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "upleft",
-                        })
-                      )
+                      isDrawBorder(row, col, "upleft") || isBuyableNow(row, col)
                     }
                     border_upright={
-                      owner({ row: row - 1, col: col - 1 }) !=
-                      owner(
-                        getAdjacentPos({
-                          row: row - 1,
-                          col: col - 1,
-                          dir: "upright",
-                        })
-                      )
+                      isDrawBorder(row, col, "upright") ||
+                      isBuyableNow(row, col)
                     }
                     x={(col - 1) * 100}
                     y={(row - 1) * 100 - (col % 2 ? 0 : 50)}
@@ -294,13 +435,22 @@ export default function Home() {
                     id={`drop_hex${col},${row}`}
                     className="w-[100px] h-[87px] absolute"
                     style={{ transform: `translateX(100px)` }}
+                    buyableOverlay={isBuyableNow(row, col)}
+                    onBuying={buyHexAt(row, col)}
                     minion={
-                      minionList[row - 1][col - 1] < 0
+                      game.minionGrid[row - 1][col - 1].owner === "None" ||
+                      game.minionGrid[row - 1][col - 1].minionType === "None"
                         ? ""
-                        : game.minions[minionList[row - 1][col - 1]].imageId({
-                            col: "#e55451",
-                            scale: 0.8,
-                          })
+                        : getMinionImage(
+                            minionTypeToImageId(
+                              game.minionGrid[row - 1][col - 1].minionType
+                            )
+                          )(
+                            calculateLeaderColor(
+                              game.minionGrid[row - 1][col - 1].owner
+                            ),
+                            0.8
+                          )
                     }
                   />
                 ))
@@ -315,12 +465,17 @@ export default function Home() {
             >
               <div
                 style={{
-                  pointerEvents: gameState === "spawning" || gameState === "first_spawning" ? "all" : "none",
+                  pointerEvents:
+                    game.state === "spawning" || game.state === "first_spawning"
+                      ? "all"
+                      : "none",
                 }}
                 className="absolute w-full h-full px-5 items-center gap-5 flex flex-col"
               >
                 <TextFade
-                  isShow={gameState === "spawning" || gameState === "first_spawning"}
+                  isShow={
+                    game.state === "spawning" || game.state === "first_spawning"
+                  }
                   className="w-full flex-col flex gap-2"
                   direction="down"
                 >
@@ -328,26 +483,34 @@ export default function Home() {
                     Minion Store
                   </div>
                   <Separator className="w-full" gradient={true} />
-                  <div className="text-center w-full text-[1.1rem]">{`Price: ${game.settings["spawn_cost"]}`}</div>
+                  <div className="text-center w-full text-[1.1rem]">{`Price: ${room.config["spawn_cost"]}`}</div>
                 </TextFade>
                 <TextFade
-                  isShow={gameState === "spawning" || gameState === "first_spawning"}
+                  isShow={
+                    game.state === "spawning" || game.state === "first_spawning"
+                  }
                   direction="up"
                   childClass="w-full h-[15%] flex flex-row gap-5"
                   className="w-full h-full flex flex-col items-center gap-5"
                 >
-                  {game.minions.map((x, i) => (
+                  {minions.minions.map((x, i) => (
                     <div
                       key={`minnion${i}`}
                       className="w-full h-full flex flex-row gap-5"
                     >
                       <div className="w-[6rem] bg-[#0003] rounded-md flex justify-center items-center h-full">
                         <Draggable
-                          disabled={gameState !== "spawning" && gameState !== "first_spawning"}
+                          disabled={
+                            game.state !== "spawning" &&
+                            game.state !== "first_spawning"
+                          }
                           minion={i}
                           id={`minnion_${i}`}
                         >
-                          {x.imageId({ col: "#e55451", scale: 1 })}
+                          {minionsImage[x.imageId](
+                            calculateLeaderColor(user?.username),
+                            1
+                          )}
                         </Draggable>
                       </div>
                       <div className="w-[60%] h-full flex flex-col">
@@ -375,12 +538,12 @@ export default function Home() {
               </div>
               <div
                 style={{
-                  pointerEvents: gameState === "buying" ? "all" : "none",
+                  pointerEvents: game.state === "buying" ? "all" : "none",
                 }}
                 className="absolute w-full h-full px-5 items-center gap-5 flex flex-col"
               >
                 <TextFade
-                  isShow={gameState === "buying"}
+                  isShow={game.state === "buying"}
                   direction="down"
                   className="w-full flex flex-col gap-2"
                 >
@@ -388,7 +551,7 @@ export default function Home() {
                     Conquering Hex
                   </div>
                   <Separator className="w-full" gradient={true} />
-                  <div className="text-center w-full text-[1.1rem]">{`Price: ${game.settings["hex_purchase_cost"]}`}</div>
+                  <div className="text-center w-full text-[1.1rem]">{`Price: ${room.config["hex_purchase_cost"]}`}</div>
                 </TextFade>
               </div>
               {/* </>:""} */}
@@ -398,12 +561,14 @@ export default function Home() {
                 ""
               ) : (
                 <>
-                  <Button_v6
+                  <Button_v5
+                    Icon="X"
+                    hoverClass="bg-red-400"
                     onClick={() => showInfo(-1)}
                     className="absolute w-[5rem] top-4 right-5"
                   >
                     X
-                  </Button_v6>
+                  </Button_v5>
                   {/*                   <button
                     onClick={() => showInfo(-1)}
                     className="absolute bo top-4 right-5 bg-red-400 p-3 rounded-md px-5"
@@ -412,15 +577,18 @@ export default function Home() {
                   </button> */}
                   <div className="text-[1.5rem] text-center">Minion Detail</div>
 
-                  {game.minions[onInfo].imageId({ col: "#e55451", scale: 1 })}
+                  {getMinionImage(minions.minions[onInfo].imageId)(
+                    calculateLeaderColor(user?.username),
+                    1
+                  )}
                   <div className="text-[2rem] text-center">
-                    {game.minions[onInfo].name}
+                    {minions.minions[onInfo].name}
                   </div>
-                  <div className="text-[1.2rem] text-center">{`Defense: ${game.minions[onInfo].defense}`}</div>
+                  <div className="text-[1.2rem] text-center">{`Defense: ${minions.minions[onInfo].defense}`}</div>
                   <textarea
                     style={{ resize: "none" }}
                     disabled={true}
-                    value={game.minions[onInfo].script}
+                    value={minions.minions[onInfo].script}
                     className="h-full text-[#fff] bg-[#52525299] rounded-md p-5 text-[1rem]"
                   ></textarea>
                 </>
@@ -436,20 +604,23 @@ export default function Home() {
                 format={{ useGrouping: false }}
                 transformTiming={{ duration: 750, easing: "ease-out " }}
                 plugins={[continuous]}
-                suffix={` / ${game.settings["max_budget"]}`}
+                suffix={` / ${room.config["max_budget"]}`}
                 value={game.budget}
                 className="text-[1.1rem] text-center"
               ></NumberFlow>
             </div>
-            <div className="text-[1.1rem] text-center">Minion: 2/10</div>
-            <div className="text-[1.1rem] text-center">Hex: 5/20</div>
+            <div className="text-[1.1rem] text-center">{`Minion: ${game.minionAmount}/${room.config["max_spawns"]}`}</div>
+            <div className="text-[1.1rem] text-center">{`Hex: ${game.hexAmount}`}</div>
           </div>
-          <div className="flex h-full flex-row justify-end items-center w-full px-10">
+          <div className="flex h-full flex-row gap-5 justify-end items-center w-full px-10">
+            <Button_v5 className="px-10 py-6" onClick={changeSpeed} Icon={speedButtonHoverText()}>
+              {`x${speed}`}
+            </Button_v5>
             <Button_v5
               onClick={() => {
                 nextState();
               }}
-              disabled={gameState === "first_spawning"}
+              disabled={game.state === "first_spawning"}
               Icon={stateButton()}
               className="w-[12rem] text-[1.1rem] py-6 px-10"
             >
