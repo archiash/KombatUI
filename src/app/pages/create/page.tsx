@@ -1,7 +1,5 @@
 "use client";
-import ControlledTextArea from "@/app/components/ControllTextarea";
 import { Minion1, Minion2, Minion3 } from "@/app/components/minion";
-import Prev from "@/app/components/Prev";
 import { useWebSocket } from "@/hooks/useWebsocket";
 import { useAppSelector } from "@/stores/hook";
 import {
@@ -25,7 +23,6 @@ import { i, tr } from "framer-motion/client";
 import { useRouter } from "next/navigation";
 import { ChangeEvent, useEffect, useState } from "react";
 import { useDispatch } from "react-redux";
-import InputField from "@/app/components/InputFix";
 import { useCaretPosition } from "react-use-caret-position";
 import { EditingRoom } from "@/types/editingRoom";
 import { Button_v5 } from "@/app/components/EButton";
@@ -498,4 +495,4 @@ const Create = () => {
   );
 };
 
-export default Prev(Create);
+export default Create
