@@ -15,6 +15,7 @@ import {
   setGameStream,
   selectStream,
   popGameStream,
+  addGameStream,
 } from "@/stores/slices/gameSlice";
 import { Button_v5, Button_v6 } from "@/app/components/EButton";
 import { motion } from "framer-motion";
@@ -29,6 +30,7 @@ import {
 import { useWebSocket } from "@/hooks/useWebsocket";
 import { selectUser } from "@/stores/slices/userSlice";
 import { Message, StompSubscription } from "@stomp/stompjs";
+import { useKeyboard } from "@/hooks/useKeyboard";
 
 export default function Home() {
   const cols = 8;
@@ -93,6 +95,10 @@ export default function Home() {
         return { row: -1, col: -1 };
     }
   };
+
+  const isMine = (row :number, col: number) => {
+    return game.grid[row][col] === user?.username
+  }
 
   const owner = ({ row, col }: { row: number; col: number }) => {
     if (row < 0 || row > 7 || col < 0 || col > 7) return 0;
@@ -164,9 +170,16 @@ export default function Home() {
       }
       console.log(data);
     }
+    if(payloadCommand === "add"){
+      const data = JSON.parse(payload.body);
+      //dispatch(addGameStream(data))
+      //console.log(data)
+      patchUpdate(data[0])
+    }
   };
 
   useEffect(() => {
+    console.log(stream.length)
     if (stream.length > 0) {
       const data = setTimeout(() => {
         patchUpdate(stream[0]);
@@ -250,6 +263,15 @@ export default function Home() {
 
   const getHeight = () => Math.sqrt(3) * (cols + 0.5) * 50;
   const getWidth = () => 1.5 * 50 * rows + 0.5 * 50;
+
+  const sendSpawnMessage = (row:number, col:number, index: number) => {
+    sendMessage("/game/spawn", {
+      row: row,
+      col: col,
+      roomId: room.id,
+      owner: user?.username,
+      minionType: minions.minions[index].name,})
+  }
 
   function handleDragEnd({ active, over }: { active: any; over: any }) {
     {
@@ -357,9 +379,101 @@ export default function Home() {
       return `x1`
     }
   }
+  
+  const [keyCommand, setKeyCommand] = useState<string>("")
+  const [commandErr, setCommandErr] = useState<string>("")
+  const k = useKeyboard()
+
+
+useEffect(() => {
+  console.log(k)
+  if(k !== ""){
+    setCommandErr("")
+    if(keyCommand.length > 0 && k === "Enter"){
+      if(keyCommand === "skip" || keyCommand === "ss"){
+       skipState() 
+      }else if(keyCommand === "x"){
+        showInfo(-1)
+      }
+
+      let match = keyCommand.match(/s[1-5][1-8][1-8]/)
+      if(match && match[0] === keyCommand){
+        const index = Number(keyCommand[1])
+        const row = Number(keyCommand[2])
+        const col = Number(keyCommand[3])
+        if(index > minions.minions.length){
+          setCommandErr("Minion Index Out of Range")
+          setKeyCommand("")
+          return
+        }
+        sendSpawnMessage(row - 1, col - 1, index - 1)
+        setKeyCommand("")
+      }
+      match = keyCommand.match(/b[1-8][1-8]/)
+      if(match && match[0] === keyCommand){
+        const row = Number(keyCommand[1])
+        const col = Number(keyCommand[2])
+        buyHexAt(row, col)()
+        setKeyCommand("")
+        return
+      }
+      match = keyCommand.match(/i[1-5]/)
+      if(match && match[0] === keyCommand){
+        const index = Number(keyCommand[1])
+        showInfo(index - 1)
+        setKeyCommand("")
+        return
+      }
+
+      setKeyCommand("")
+    }  
+    else if(k?.length === 1 && (k?.match(/[a-z]/i) || k.match(/[0-9]/)) || k === "+" || k === " " || k === "_"){
+      setKeyCommand(keyCommand + k)
+    }else if(k === "Backspace"){
+        setKeyCommand(keyCommand.slice(0, -1))
+    }
+}}, [k])
+
+  const [isFocus, setFocus] = useState<boolean>(false);
+  
+  const [isSpawningCommand, setSpawningCommand] = useState<boolean>(false)
+  const [spawningCommandPos, setSpawningCommandPos] = useState<{row:number, col:number}>({row:-1, col:-1})
+  const [isBuyingCommand, setBuyingCommand] = useState<boolean>(false)
+
+  
+
+  useEffect(() => {
+    setSpawningCommand(false)
+    setBuyingCommand(false)
+    console.log("command: " + keyCommand)
+    if(keyCommand.length > 1){
+      console.log("Command Slice: ", keyCommand.slice(0, 2))
+      if(keyCommand.slice(0, 2).match(/s[1-5]/)){
+        setSpawningCommand(true)
+        let row = -1
+        let col = -1
+        if(keyCommand.length > 2 && keyCommand[2].match(/[0-9]/)){
+          row = Number(keyCommand[2])
+        }
+        if(keyCommand.length > 3 && keyCommand[3].match(/[0-9]/)){ 
+          col = Number(keyCommand[3])
+        }
+        setSpawningCommandPos({row: row, col: col})
+        console.log("isSpawingCommand")
+      }
+    }
+    if(keyCommand[0] === "b"){
+      setBuyingCommand(true)
+    }
+  }, [keyCommand])
+
+
 
   return (
     <DndContext onDragEnd={handleDragEnd}>
+      <div className="absolute pointer-events-none text-center py-2 h-screen w-screen flex flex-col-reverse">
+        <div className={`w-full bg-[#0005] h-6 ${commandErr === "" ? `text-white` : `text-red-500`}`}>{commandErr === "" ? keyCommand : commandErr}</div>
+      </div>
       <div className="h-screen w-full flex flex-col">
         <div className="static h-screen w-full flex flex-row bg-[#2a2a2a99] items-center my-auto">
           <div className="w-[15%] text-[#bbb] pt-5 bg-[#00000088] h-[100%] flex flex-col">
@@ -387,6 +501,9 @@ export default function Home() {
               {range(1, cols).map((col) =>
                 range(1, rows).map((row) => (
                   <DroppableHex
+                  isSpawningCommand = {isSpawningCommand && isMine(row - 1, col - 1)}
+                  spawningPos = {spawningCommandPos}
+                  isBuyingCommand = {isBuyingCommand && isBuyableNow(row, col)}
                     price={room.config["hex_purchase_cost"]}
                     border_color={calculateBorderColor(
                       owner({ row: row - 1, col: col - 1 }),
@@ -584,7 +701,7 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <div className="flex flex-row gap-5 text-[1.3rem] origin-bottom items-center px-5 pl-10 h-[10%] bg-[#0e0d0d]">
+        <div className="flex flex-row gap-5 text-[1.3rem] pb-4 origin-bottom items-center px-5 pl-10 h-[10%] bg-[#0e0d0d]">
           <div className="w-[70%] flex flex-row gap-10 items-center">
             <div className="w-[20rem] items-center justify-start flex bg-[#1e1e1e] px-2 rounded-sm">
               <NumberFlow

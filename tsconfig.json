@@ -22,6 +22,6 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/utils/useMousePosition.js", "src/app/components/Header", "src/app/page.jsx", "src/app/components/Page.jsx", "src/app/page.jsx", "src/app/pages/join/page.jsx", "src/app/components/DND/Draggable.jsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "src/app/utils/useMousePositionx.js", "src/app/components/Header", "src/app/page.jsx", "src/app/components/Page.jsx", "src/app/page.jsx", "src/app/pages/join/page.jsx", "src/app/components/DND/Draggable.tsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx", "src/app/components/InputFix.jsx"],
   "exclude": ["node_modules"]
 }

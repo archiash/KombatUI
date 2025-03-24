@@ -60,8 +60,8 @@ export const useWebSocket = () => {
   const connect = () => {
     try {
       const stompClient = new Client({
-        //webSocketFactory: () => new SockJS(`${serverUrl}/ws`i),
-        brokerURL: `ws://192.168.1.49:8080/ws`,
+        webSocketFactory: () => new SockJS(`${serverUrl}/ws`),
+        //brokerURL: `ws://10.123.96.215:8080/ws`,
         onConnect: () => onConnected(stompClient),
         onDisconnect: () => disconnect(),
         disconnectHeaders: {"discon":"dicon"},

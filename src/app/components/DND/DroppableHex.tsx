@@ -4,7 +4,7 @@ import { useEffect, createRef, useState } from "react";
 
 export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:number, minion: ReactNode, bomb:String, x:number, y:number
   ,buyableOverlay:boolean, border_color: string, border_up: boolean, border_down: boolean, border_downleft: boolean, border_downright: boolean, border_upleft: boolean, border_upright: boolean
-  , price : number ,onBuying: () => void
+  , price : number ,onBuying: () => void, isSpawningCommand : boolean, isBuyingCommand: boolean, spawningPos: {row: number, col:number}
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: props.id,
@@ -85,6 +85,16 @@ export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:numb
     return `z-0`
   }
 
+  const spawing = () => {
+    let l = 0;
+    if(props.isSpawningCommand){
+      l++;
+      if(props.spawningPos.col === props.col || props.spawningPos.col === -1) l++;
+      if(props.spawningPos.row === props.row || props.spawningPos.row === -1) l++;
+    }
+    return l;
+  }
+
   return (
     <div
       className={`w-[100px] h-[87px] absolute ${calculateZIndex(isHover || isOver, props.border_color)}`}
@@ -97,8 +107,11 @@ export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:numb
       <div className="absolute z-40 w-full h-full p-3 flex justify-center items-center"
         ref={setNodeRef}
       >
-        <div style={{pointerEvents: "none", opacity: props.buyableOverlay ? 0.5 : 1}} className="w-full h-full flex justify-center items-center">{minion}</div>
-        {props.buyableOverlay && <div className="z-50 absolute" style={{color : "#FFFFFF"}}>{`${props.price} $`}</div>}
+        <div style={{pointerEvents: "none", opacity: props.buyableOverlay || props.isSpawningCommand ? 0.3 : 1}} className="w-full h-full flex justify-center items-center">{minion}</div>
+        <div className="flex absolute justify-center items-center flex-col">
+        {props.buyableOverlay && <div className="z-50 " style={{color : "#FFFFFF"}}>{`${props.price} $`}</div>}
+        {(props.isSpawningCommand || props.isBuyingCommand) && <div className="z-50" style={{color : `${((props.isBuyingCommand || (minion === "" && spawing() === 3))) ? "#FFFFFF" : "#FFFFFF55"}`}}>{`${props.row} ${props.col}`}</div>}
+        </div>
       </div>
       <svg
         //ref={setNodeRef}
@@ -117,10 +130,9 @@ export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:numb
           style={{ pointerEvents: "none", fill: props.border_color, opacity: 0.03 }}
           points={hexagonPoints(50)}
         />
-
         {props.buyableOverlay && <polygon
           style={{ pointerEvents: "none", fill: props.border_color }}
-          className=" opacity-10 z-50 "
+          className=" opacity-5 z-50 "
           points={hexagonPoints(50)}
         />}
         <line

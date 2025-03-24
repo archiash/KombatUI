@@ -5,11 +5,13 @@ import { useWebSocket } from "@/hooks/useWebsocket";
 import { useRouter } from "next/navigation";
 import { useDispatch } from "react-redux";
 import { selectUser, setUser } from "@/stores/slices/userSlice";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { setRoom } from "@/stores/slices/roomSlice";
 import { Message, StompSubscription } from "@stomp/stompjs";
 import { useAppSelector } from "@/stores/hook";
 import { TextFade } from "@/app/components/FadeUp";
+import { useKeyboard } from "@/hooks/useKeyboard";
+import useFocus from "@/hooks/useFocus";
 
 export default function Home() {
   const dispatch = useDispatch();
@@ -18,13 +20,6 @@ export default function Home() {
   const { sendMessage, subscribe, unsubscribe } = useWebSocket();
   const [roomIdToJoin, setRoomIdToJoin] = useState<string>("");
   const [menu, setMenu] = useState<"select" | "create" | "join">("select");
-
-  useEffect(() => {
-    const data = setTimeout(() => {
-      console.log("5sec");
-    }, 5000)
-    return () => clearTimeout(data)
-  })
 
   useEffect(() => {
     setUserSubscription(userSubscription);
@@ -53,6 +48,71 @@ export default function Home() {
     }, 0);
     return () => clearTimeout(data);
   }, []);
+
+  const [keyCommand, setKeyCommand] = useState<string>("")
+  const [commandErr, setCommandErr] = useState<string>("")
+  const k = useKeyboard()
+
+  const roomInput = useFocus<HTMLInputElement>()
+
+  useEffect(() => {
+    console.log(k)
+    if(k !== "" && !isFocusRoomInput){
+      setCommandErr("")
+      if(k === "Enter"){
+        if(keyCommand === "j"){
+          if(menu === "join"){
+            roomInput.current?.focus()
+          }
+          selectModeHandle("join")
+        }
+        else if(keyCommand === "c"){
+          selectModeHandle("create")
+        }
+        else if(keyCommand === "b"){
+          selectModeHandle("select")
+        }else if(menu === "create" && keyCommand === "d"){
+          console.log("duel Create")
+          createGameHandle("duel")()          
+        }else if(menu === "create" && keyCommand === "s"){
+          console.log("solitaire Create")
+          createGameHandle("solitaire")()          
+        }else if(menu === "create" && keyCommand === "a"){
+          console.log("auto Create")
+          createGameHandle("auto")()        
+        }
+        else{
+          setCommandErr("Don't have this command")
+        }
+        setKeyCommand("")
+      }else if(k === "Backspace")
+      {
+        setKeyCommand(keyCommand.slice(0, -1))
+      }
+      else if(k?.length === 1 && k?.match(/[a-z]/i) || k === " "){
+        setKeyCommand(keyCommand + k)
+      }
+
+    }
+  }, [k])
+
+  useEffect(() => {
+    if(menu === "join" && roomInput.current !== null){
+      roomInput.current.focus()    
+    }
+  }, [menu])
+
+
+  const [isFocusRoomInput, setFocusRoomInput] = useState<boolean>(false)
+
+
+  useEffect(() => {
+    setKeyCommand("")
+  }, [isFocusRoomInput])
+
+  useEffect(() => {
+    console.log(keyCommand)
+  }, [keyCommand])
 
   const createGameHandle = (gameMode: string) => () => {
     try {
@@ -116,6 +176,9 @@ export default function Home() {
 
   return (
     <>
+      <div className="absolute pointer-events-none text-center py-2 h-screen w-screen flex flex-col-reverse">
+        <div className={`w-full bg-[#0005] h-6 ${commandErr === "" ? `text-white` : `text-red-500`}`}>{commandErr === "" ? keyCommand : commandErr}</div>
+      </div>
       <div className="w-screen bg-[#151515] h-screen flex justify-center">
         <div className="w-[80%] gap-5 flex flex-col items-center my-[20%]">
           <div className="text-[2.5rem]">{`Welcome, ${user?.username}`}</div>
@@ -157,7 +220,18 @@ export default function Home() {
 
             <InputBlock  upSection={<div style={{opacity: joinAlert === 'None'? 0 : 1}} className="text-red-400" >{joinAlert}</div>} className={`origin-bottom ${joinAlert !== "None" ? "border-red-400 dark:shadow-red-500" : ""}`} variant={"neubrutalism"}>
               <Input
+                disabled={menu !== "join"}
                 value={roomIdToJoin}
+                onFocus={() => setFocusRoomInput(true)}
+                onBlur={() => setFocusRoomInput(false)}
+                ref={roomInput}
+                onKeyDown={(e) => {
+                  if(e.key === "Enter"){
+                    joinGameHandle()
+                  }else if(e.key === "Escape"){
+                    roomInput.current?.blur()
+                  }
+                }}
                 onChange={(e) => {setRoomIdToJoin(e.target.value), setJoinAlert("None")}}
               />
             </InputBlock>

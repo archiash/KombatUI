@@ -10,7 +10,6 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import Create from "@/app/components/Prev";
 import { Minion1 } from "./components/minion";
 import { useAppSelector } from "@/stores/hook";
 import { selectWebsocket } from "@/stores/slices/webSocketSlice";

@@ -18,6 +18,8 @@ import { sub } from "framer-motion/client";
 import Stomp from "stompjs";
 import { Button_v5 } from "@/app/components/EButton";
 import { selectUser } from "@/stores/slices/userSlice";
+import { useKeyboard } from "@/hooks/useKeyboard";
+import useFocus from "@/hooks/useFocus";
 
 export default function Setting() {
   const router = useRouter();
@@ -151,8 +153,55 @@ export default function Setting() {
     sendMessage(`/room/confirmConfig`, {roomId : room.id, username : user?.username, confirmed: !confirm})
   }
 
+  const [keyCommand, setKeyCommand] = useState<string>("")
+  const [commandErr, setCommandErr] = useState<string>("")
+  const k = useKeyboard()
+
+  const roomInput = useFocus<HTMLInputElement>()
+
+  useEffect(() => {
+    console.log(k)
+    if(k !== "" && !isFocus){
+      setCommandErr("")
+      if(k === "Enter"){
+        if(keyCommand === "next"){
+          if(!confirm) sendComfirmMessage()
+          setKeyCommand("")
+          return
+        }else if(keyCommand === "cancle"){
+          if(confirm) sendComfirmMessage()
+          setKeyCommand("")
+          return
+        }
+        for (const cf in room.config) {
+          const regex = new RegExp(cf + " (\\d+)")
+          console.log(regex)
+          if(keyCommand.match(regex)){
+            const val = keyCommand.split(' ')[1]
+            changeSetting(cf, Number(val))
+            setKeyCommand("")
+            return
+          }
+        }
+        setCommandErr("Don't have this command")
+      }else if(k === "Backspace")
+      {
+        setKeyCommand(keyCommand.slice(0, -1))
+      }
+      else if(k?.length === 1 && (k?.match(/[a-z]/i) || k.match(/[0-9]/)) || k === " " || k === "_"){
+        setKeyCommand(keyCommand + k)
+      }
+
+    }
+  }, [k])
+
+  const [isFocus, setFocus] = useState<boolean>(false);
+
   return (
     <>
+      <div className="absolute pointer-events-none text-center py-2 h-screen w-screen flex flex-col-reverse">
+        <div className={`w-full bg-[#0005] h-6 ${commandErr === "" ? `text-white` : `text-red-500`}`}>{commandErr === "" ? keyCommand : commandErr}</div>
+      </div>
       {confirm && <div className="w-screen h-screen bg-[#00000055] flex flex-col gap-5 items-center pt-[30%] justify-center absolute z-10">
         <div className="text-2xl">Waiting for Other Player to Comfirm</div>
         <Button_v5 Icon="Cancle" className="text-xl w-[10rem]" onClick={() => {sendComfirmMessage()}}>Cancle</Button_v5>
@@ -182,6 +231,8 @@ export default function Setting() {
                       className="text-end"
                       value={element.value}
                       type="number"
+                      onFocus={() => setFocus(true)}
+                      onBlur={()=> setFocus(false)}
                       onChange={(e) =>
                         changeSetting(element.setting, e.target.valueAsNumber)
                       }

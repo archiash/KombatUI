@@ -28,6 +28,8 @@ import { EditingRoom } from "@/types/editingRoom";
 import { Button_v5 } from "@/app/components/EButton";
 import { Input, InputBlock } from "@/app/components/EInput";
 import { data } from "react-router";
+import { useKeyboard } from "@/hooks/useKeyboard";
+import useFocus from "@/hooks/useFocus";
 
 interface MinionSelectItem {
   minionTypeName: string;
@@ -75,9 +77,15 @@ const Create = () => {
     setCurrentType(minionList.length);
   };
 
-  const onEditing = async (field:"name" | "defense" | "script" | "none") => {
+  const [editing, setEditing] = useState<"name" | "defense" | "script" | "none">("none")
+  
+  useEffect(() => {
     console.log("mIndex", currentType)
-    sendMessage("/room/minion/edit", {roomId: room.id, index : currentType, field: field});
+    sendMessage("/room/minion/edit", {roomId: room.id, index : currentType, field: editing});
+  }, [editing])
+
+  const onEditing = async (field:"name" | "defense" | "script" | "none") => {
+    setEditing(field)
   }
 
 
@@ -90,9 +98,14 @@ const Create = () => {
   const onMinionUpdate = (payload: Message) => {
     const command = payload.headers["command"];
     if (command === "update" || command === "get") {
-      const data = JSON.parse(payload.body);
+
+        const data = JSON.parse(payload.body);
+        console.log(data);
+        dispatch(setMinions(data));
+
+/*       const data = JSON.parse(payload.body);
       console.log(data);
-      dispatch(setMinions(data));
+      dispatch(setMinions(data)); */
     }else if(command === "edit"){
       const data = JSON.parse(payload.body)
       console.log(data);
@@ -166,7 +179,6 @@ const Create = () => {
     }
   }, [indexErr])
   
-
   useEffect(() => {
     console.log("Dispatch")
     let data = setTimeout(() => {
@@ -201,7 +213,7 @@ const Create = () => {
 
   const removeMinionButtonStyle = () =>
     `w-full bg-[#d65959] h-[5%] ${
-      roomMinions.minions.length <= 1 ? "invisible" : "visible"
+      roomMinions.minions.length <= 1 || localStorage.getItem("showUI") === "false" ? "invisible" : "visible"
     }`;
 
   const [strategy, setStrategy] = useState("");
@@ -211,7 +223,6 @@ const Create = () => {
   const router = useRouter();
   const [currentType, setCurrentType] = useState(0);
 
-  
   const removeMinion = () => {
     sendMessage("/room/minion/remove", {roomId: room.id, index: currentType})
     /* console.log(minionList);
@@ -272,6 +283,7 @@ const Create = () => {
 
   const loadPreset = () => {
     console.log("Load Preset");
+    
     sendMessage(`/room/minion/preset`, { roomId: room.id, index: currentType });
   };
 
@@ -364,15 +376,113 @@ const Create = () => {
     sendMessage(`/room/minion/confirm`, {roomId: room.id, confirmed: confirmed, username: user?.username})
   }
 
+  const [keyCommand, setKeyCommand] = useState<string>("")
+  const [commandErr, setCommandErr] = useState<string>("")
+  const k = useKeyboard()
+
+  const nameInput = useFocus<HTMLInputElement>()
+  const defenseInput = useFocus<HTMLInputElement>()
+  const scriptInput = useFocus<HTMLTextAreaElement>()
+
+  const [nameFocus, setNameFocus] = useState<boolean>(false)
+  const [defenseFocus, setDefenseFocus] = useState<boolean>(false)
+  const [scriptFocus, setScriptFocus] = useState<boolean>(false)
+
+  useEffect(() => {
+    console.log(k)
+    if(k !== "" && !nameFocus && !defenseFocus && !scriptFocus){
+      setCommandErr("")
+      if(keyCommand.length > 0 && k === "Enter"){
+        const match = keyCommand.match(/m[1-5](n|s|d)?/)
+        if(match && keyCommand === match[0]){
+          const index = Number(keyCommand[1])
+          if(index - 1 >= roomMinions.minions.length){
+            setCommandErr("Minion Index out of range")
+            setKeyCommand("")
+            return
+          }
+          loadMinion(index - 1)
+          
+          if(keyCommand.length > 2){
+            const cm = keyCommand[2]
+            //console.log(cm)
+            if(cm === "n"){ 
+              nameInput.current?.focus()
+              onEditing("name")
+            }
+            if(cm === "d"){ 
+              defenseInput.current?.focus()
+              onEditing("defense")
+            }
+            if(cm === "s") {
+              scriptInput.current?.focus()
+              onEditing("script")
+
+            }
+          }
+          console.log(keyCommand)
+        }
+        else if(keyCommand === "n"){
+          nameInput.current?.focus()
+        }else if(keyCommand === "d"){
+          defenseInput.current?.focus()
+        }else if(keyCommand === "s"){
+          scriptInput.current?.focus()
+        }else if(keyCommand === "l"){
+          if(!(room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType)){
+            loadPreset()
+          }
+        }else if(keyCommand === "del"){
+          removeMinion()
+        }else if(keyCommand === "hui"){
+          localStorage.setItem("showUI", "false")
+        }else if(keyCommand === "sui"){
+          localStorage.setItem("showUI", "true")
+        }
+        else if(keyCommand === "+"){
+          onAddMinion()  
+        }else if(keyCommand === "next"){
+          sendComfirmMessage(true)
+        }else if(keyCommand === "cancle"){
+          if(confirm){
+          sendComfirmMessage(false)}
+        }
+        else{
+          setCommandErr("Don't have this command")
+        }
+        setKeyCommand("")
+      }else if(k === "Backspace")
+      {
+        setKeyCommand(keyCommand.slice(0, -1))
+      }
+      else if(k?.length === 1 && (k?.match(/[a-z]/i) || k.match(/[0-9]/)) || k === "+" || k === " " || k === "_"){
+        setKeyCommand(keyCommand + k)
+      }else if(k === "ArrowRight"){
+        changeMinionImage(1)()
+      }
+      else if(k === "ArrowLeft"){
+       changeMinionImage(-1)() 
+      }else if(k === "ArrowUp"){
+        if(currentType > 0) loadMinion(currentType - 1)
+      }else if(k === "ArrowDown"){
+        if(currentType < roomMinions.minions.length - 1) loadMinion(currentType + 1)
+      }
+    }
+  }, [k])
+
+  const [isFocus, setFocus] = useState<boolean>(false);
+
   return (
     <>
-    
+      <div className="absolute pointer-events-none text-center py-2 h-screen w-screen flex flex-col-reverse">
+        <div className={`w-full bg-[#0005] h-6 ${commandErr === "" ? `text-white` : `text-red-500`}`}>{commandErr === "" ? keyCommand : commandErr}</div>
+      </div>
       {confirm && <div className="w-screen h-screen bg-[#00000055] flex flex-col gap-5 items-center pt-[30%] justify-center absolute z-10">
         <div className="text-2xl">Waiting for Other Player to Comfirm</div>
         <Button_v5 Icon="Cancle" className="text-xl w-[10rem]" onClick={() => sendComfirmMessage(false)}>Cancle</Button_v5>
       </div>}
     <div className="text-[1.3rem] flex flex-col h-screen px-10 gap-0">
-      <div className="flex flex-row h-[90%] gap-0">
+      <div className={`flex flex-row h-full gap-0 ${localStorage.getItem("showUI") === "true" ? "" : "mb-8"}`}>
         <div className=" flex flex-col w-[8rem] p-5 gap-5 items-center bg-[#2a2a2a99] m-3 rounded-md">
           {roomMinions.minions.map((x: Minion, index) => (
             <button
@@ -399,17 +509,17 @@ const Create = () => {
                 <Minion3 scale={1} col="#8DB177" />
               ))}
           </div>
-          <div className="flex h-[5%] flex-row w-full gap-2">
+          <div className={`flex h-[5%] flex-row w-full gap-2 ${localStorage.getItem("showUI") === "true" ? "" : "hidden"}`}>
             <button
               onClick={changeMinionImage(-1)}
-              className="bg-[#52525299] h-full w-full"
+              className={`bg-[#52525299] h-full w-full ${localStorage.getItem("showUI") === "true" ? "" : "hidden"}`}
             >
               {" "}
               {"<<"}{" "}
             </button>
             <button
               onClick={changeMinionImage(1)}
-              className="bg-[#52525299] h-full w-full"
+              className={`bg-[#52525299] h-full w-full ${localStorage.getItem("showUI") === "true" ? "" : "hidden"}`}
             >
               {" "}
               {">>"}
@@ -422,9 +532,15 @@ const Create = () => {
             disabled={room.otherEdit !== undefined && room.otherEdit.field === "name" && room.otherEdit.mindex === currentType}
             
             value={typeName}
+            ref={nameInput}
             onChange={changeMinionName}
-            onFocus={() => onEditing("name")}
-            onBlur={() => {onEditing("none"), sendMinionName()}}
+            onFocus={() => {onEditing("name") ,setNameFocus(true)}}
+            onBlur={() => {onEditing("none"), sendMinionName(), setNameFocus(false)}}
+            onKeyDown={(e) => {
+              if(e.key === "Escape"){
+                nameInput.current?.blur()
+              }
+            }}
             style={{ resize: "none" }}
             placeholder="Minion Type Name"
             className={`w-full h-full text-[#fff] `}
@@ -434,9 +550,15 @@ const Create = () => {
             value={defense}
             disabled={room.otherEdit !== undefined && room.otherEdit.field === "defense" && room.otherEdit.mindex === currentType}
             onChange={changeMinionDefense}
-            onFocus={() => onEditing("defense")}
-            onBlur={() => {onEditing("none"), sendMinionDefense()}}
+            ref={defenseInput}
+            onFocus={() => {onEditing("defense"), setDefenseFocus(true)}}
+            onBlur={() => {onEditing("none"), sendMinionDefense(), setDefenseFocus(false)}}
             type="number"
+            onKeyDown={(e) => {
+              if(e.key === "Escape"){
+                defenseInput.current?.blur()
+              }
+            }}  
             min={0}
             max={10 ** 9}
             style={{ resize: "none" }}
@@ -457,11 +579,16 @@ const Create = () => {
           <textarea
             value={strategy}
             disabled={room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType}
-            onFocus={() => onEditing("script")}
-            onBlur={() => {onEditing("none"), sendMinionScript()}}
+            ref={scriptInput}
+            onFocus={() => {onEditing("script"), setScriptFocus(true)}}
+            onBlur={() => {onEditing("none"), sendMinionScript(), setScriptFocus(false)}}
             onChange={changeMinionScript}
             style={{ resize: "none" }}
-            autoFocus={true}
+            onKeyDown={(e) => {
+              if(e.key === "Escape"){
+                scriptInput.current?.blur()
+              }
+            }}
             placeholder="Minion Strategy Script"
             className={`h-full text-[#fff] bg-[#52525299] rounded-md p-5 text-[1rem] ${scriptErr === "None" ? "" : "border-2 border-red-400"} ${room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType ? `border-emerald-400 border-2` : ""}`}
 
@@ -469,22 +596,22 @@ const Create = () => {
           <div className="flex flex-row justify-end gap-10">
             <button onClick={loadPreset}
             disabled={room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType}
-            className={`${room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType ? `opacity-0` : ``}`}
+            className={`${localStorage.getItem("showUI") === "true" ? "" : "hidden"} ${room.otherEdit !== undefined && room.otherEdit.field === "script" && room.otherEdit.mindex === currentType ? `opacity-0` : ``}`}
             >Load Preset</button>
           </div>
         </div>
       </div>
-      <div className="flex flex-row h-[7%] gap-0">
+      <div className={`${localStorage.getItem("showUI") === "true" ? "flex flex-row h-[7%] mb-8 gap-0" : "hidden h-0"} `}>
         <button
-          onClick={() => router.push("/pages/join")}
-          className="w-[20%] bg-[#4F4F4F] rounded-md text-[1.3rem]"
+            onClick={() => router.push("/pages/join")}
+          className={`w-[20%] bg-[#4F4F4F] rounded-md text-[1.3rem] ${localStorage.getItem("showUI") === "true" ? "" : "hidden"}`}
         >
           Back
         </button>
           <div className="w-[60%] text-center">{otherConfirm ? `Other Player has Confirmed` : ``}</div>
           <button
             onClick={() => sendComfirmMessage(true)}
-            className="w-[20%] bg-[#8DB177] rounded-md text-[1.3rem]"
+            className={`w-[20%] bg-[#8DB177] rounded-md text-[1.3rem] ${localStorage.getItem("showUI") === "true" ? "" : "hidden"}`}
           >
             {otherConfirm ? `Next` : `Confirm`}
           </button>
