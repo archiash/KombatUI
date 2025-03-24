@@ -4,5 +4,5 @@ export interface Minion{
     name: string
     defense: number
     script: string
-    imageId: any
+    imageId: number
 }

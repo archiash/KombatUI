@@ -10,7 +10,6 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
-import Create from "@/app/components/Prev";
 import { Minion1 } from "./components/minion";
 import { useAppSelector } from "@/stores/hook";
 import { selectWebsocket } from "@/stores/slices/webSocketSlice";
@@ -25,6 +24,8 @@ import Stomp from "stompjs";
 export default function Menu() {
   const [userSubscription, setUserSubscription] = useState<StompSubscription>();
   const { unsubscribe, subscribe, sendMessage } = useWebSocket();
+
+  const webSocket = useAppSelector(selectWebsocket)
 
   useEffect(() => {
     setUserSubscription(userSubscription);
@@ -75,18 +76,19 @@ export default function Menu() {
     }
   }, [isConnected]);
 
-
   const [usernameInput, setUsernameInput] = useState<string>("");
 
   const onLoginSuccessed = (payload: Stomp.Message) => {
     const user = JSON.parse(payload.body);
-    console.log(user)
+    console.log(user);
     if (user["username"] === usernameInput) {
       dispatch(setUser(user));
       payload.ack();
       router.push(`pages/join`);
-    }else{
-      setAlertInput(user["username"])
+      localStorage.setItem("username", user["username"]);
+      sessionStorage.setItem("username", user["username"])
+    } else {
+      setAlertInput(user["username"]);
     }
   };
 
@@ -99,8 +101,22 @@ export default function Menu() {
     sendMessage(`/login`, { username: usernameInput });
   };
 
-  const [alertInput, setAlertInput] = useState<string>("") 
-    
+  useEffect(() => {
+    console.log("load uername")
+    const un = localStorage.getItem("username")
+    if (un !== null) {
+      console.log("un", un)
+      const sub = subscribe(
+        `/topic/connected-${un}`,
+        onLoginSuccessed
+      );
+      setUsernameInput(un)
+      setUserSubscription(sub);
+      sendMessage(`/login`, { username: un });
+    }
+  }, [webSocket.isConnected, webSocket.client]);
+
+  const [alertInput, setAlertInput] = useState<string>("");
 
   return (
     <>
@@ -141,17 +157,28 @@ export default function Menu() {
 
         {showMenu && (
           <>
-            <div style={{opacity: alertInput !== "" ? 1 : 0}} className="w-[30rem] mt-5 text-start text-red-400">{alertInput}</div>
+            <div
+              style={{ opacity: alertInput !== "" ? 1 : 0 }}
+              className="w-[30rem] mt-5 text-start text-red-400"
+            >
+              {alertInput}
+            </div>
             <motion.div
               initial={{ opacity: 0, y: 50 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7 }}
               className="w-[30rem] items-center justify-center flex flex-row gap-5 z-10"
             >
-              
-              <InputBlock  className={`w-full ${alertInput !== "" ? "border-red-400 dark:shadow-red-500" : ""}`} variant={"neubrutalism"}>
+              <InputBlock
+                className={`w-full ${
+                  alertInput !== "" ? "border-red-400 dark:shadow-red-500" : ""
+                }`}
+                variant={"neubrutalism"}
+              >
                 <Input
-                  onChange={(e) => {setUsernameInput(e.target.value), setAlertInput("")}}
+                  onChange={(e) => {
+                    setUsernameInput(e.target.value), setAlertInput("");
+                  }}
                   placeholder="Username"
                   className="text-start "
                 />

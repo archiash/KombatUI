@@ -1,14 +1,17 @@
-import React from "react";
-import { useDroppable } from "@dnd-kit/core";
+import React, { CSSProperties, ReactNode } from "react";
+import { UniqueIdentifier, useDroppable } from "@dnd-kit/core";
 import { useEffect, createRef, useState } from "react";
 
-export function DroppableHex(props) {
+export function DroppableHex(props: {id: UniqueIdentifier, row: number, col:number, minion: ReactNode, bomb:String, x:number, y:number
+  ,buyableOverlay:boolean, border_color: string, border_up: boolean, border_down: boolean, border_downleft: boolean, border_downright: boolean, border_upleft: boolean, border_upright: boolean
+  , price : number ,onBuying: () => void, isSpawningCommand : boolean, isBuyingCommand: boolean, spawningPos: {row: number, col:number}
+}) {
   const { isOver, setNodeRef } = useDroppable({
     id: props.id,
     data: { row: props.row, col: props.col },
   });
   const [isHover, setHover] = useState(false);
-  const style = {
+  const style:CSSProperties = {
     transform: `translate(${props.x * 0.75 + props.col * 0  }px, ${
       (Math.sqrt(3) / 2) * props.y + 87 / 2 + props.row *0 
     }px)`,
@@ -20,7 +23,7 @@ export function DroppableHex(props) {
   const [strokeColor, setStrokeColor] = useState("white");
   const [textColor, setTextColor] = useState("fill-white");
 
-  const hexagonPoints = (radius) => {
+  const hexagonPoints = (radius:number) => {
     const halfWidth = (radius * Math.sqrt(3)) / 2;
     return `
       ${0},${halfWidth}
@@ -31,7 +34,7 @@ export function DroppableHex(props) {
       ${radius / 2},${0}`;
   };
 
-  const edgeList = (radius) => {
+  const edgeList = (radius:number) => {
     const halfWidth = (radius * Math.sqrt(3)) / 2;
     return [
       [0,halfWidth],
@@ -66,21 +69,52 @@ export function DroppableHex(props) {
     }
   }, [isHover, isOver]);
 
+  const calculateZIndex = (hover:boolean, col:string) => {
+    let z = 0;
+    if(col !== "#000a"){
+      z += 20;
+    }
+    if(hover){
+      z += 10;
+    }
+
+    if(z === 0) return `z-0`
+    if(z === 10) return `z-10`
+    if(z === 20) return `z-20`
+    if(z === 30) return `z-30`
+    return `z-0`
+  }
+
+  const spawing = () => {
+    let l = 0;
+    if(props.isSpawningCommand){
+      l++;
+      if(props.spawningPos.col === props.col || props.spawningPos.col === -1) l++;
+      if(props.spawningPos.row === props.row || props.spawningPos.row === -1) l++;
+    }
+    return l;
+  }
+
   return (
     <div
-      className={`w-[100px] h-[87px] absolute ${
-        isHover || isOver ? `z-10` : `z-0`
-      }`}
+      className={`w-[100px] h-[87px] absolute ${calculateZIndex(isHover || isOver, props.border_color)}`}
       style={style}
-      transform={` translate(${10 + props.x * 0.75},${
-        10 + (Math.sqrt(3) / 2) * props.y + 87 / 2
-      })`}
+      
+      //transform={` translate(${10 + props.x * 0.75},${
+      //  10 + (Math.sqrt(3) / 2) * props.y + 87 / 2
+      //})`}
     > 
-      <div className="absolute z-50 w-full h-full p-3 flex justify-center items-center">
-        {minion}
+      <div className="absolute z-40 w-full h-full p-3 flex justify-center items-center"
+        ref={setNodeRef}
+      >
+        <div style={{pointerEvents: "none", opacity: props.buyableOverlay || props.isSpawningCommand ? 0.3 : 1}} className="w-full h-full flex justify-center items-center">{minion}</div>
+        <div className="flex absolute justify-center items-center flex-col">
+        {props.buyableOverlay && <div className="z-50 " style={{color : "#FFFFFF"}}>{`${props.price} $`}</div>}
+        {(props.isSpawningCommand || props.isBuyingCommand) && <div className="z-50" style={{color : `${((props.isBuyingCommand || (minion === "" && spawing() === 3))) ? "#FFFFFF" : "#FFFFFF55"}`}}>{`${props.row} ${props.col}`}</div>}
+        </div>
       </div>
       <svg
-        ref={setNodeRef}
+        //ref={setNodeRef}
         style={{ pointerEvents: "none" }}
         className={`justify-center items-center w-[100px] h-[87px] absolute  ${strokeColor}`}
         key={`${props.x}${props.y}`}
@@ -90,10 +124,19 @@ export function DroppableHex(props) {
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           points={hexagonPoints(50)}
-          onClick={() => console.log(`${props.x},${props.y}`)}
+          onClick={() => {if(props.buyableOverlay)  props.onBuying()}}
         />
+        <polygon
+          style={{ pointerEvents: "none", fill: props.border_color, opacity: 0.03 }}
+          points={hexagonPoints(50)}
+        />
+        {props.buyableOverlay && <polygon
+          style={{ pointerEvents: "none", fill: props.border_color }}
+          className=" opacity-5 z-50 "
+          points={hexagonPoints(50)}
+        />}
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_downleft ? `#e55451`:`#000a`}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_downleft ? props.border_color :`#000a`}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[0][0]}
@@ -103,7 +146,7 @@ export function DroppableHex(props) {
           onClick={() => console.log(`${props.x},${props.y}`)}
         />
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_down ? `#e55451`:`#000a`}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_down ? props.border_color:`#000a`}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[1][0]}
@@ -113,7 +156,7 @@ export function DroppableHex(props) {
           onClick={() => console.log(`${props.x},${props.y}`)}
         />
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_downright ? `#e55451`:`#000a`}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_downright ? props.border_color:`#000a`}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[2][0]}
@@ -123,7 +166,7 @@ export function DroppableHex(props) {
           onClick={() => console.log(`${props.x},${props.y}`)}
         />  
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_upright ? `#e55451`:`#000a`}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_upright ? props.border_color:`#000a`}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[3][0]}
@@ -133,7 +176,7 @@ export function DroppableHex(props) {
           onClick={() => console.log(`${props.x},${props.y}`)}
         />    
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_up ? `#e55451`:`#000a`}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_up ? props.border_color:`#000a`}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[4][0]}
@@ -143,7 +186,7 @@ export function DroppableHex(props) {
           onClick={() => console.log(`${props.x},${props.y}`)}
         />
         <line
-          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_upleft ? `#e55451`:`#000a  `}` }}
+          style={{ pointerEvents: "auto", strokeDasharray: "100, 350", strokeWidth:1, stroke:`${props.border_upleft ? props.border_color:`#000a  `}` }}
           onMouseEnter={() => setHover(true)}
           onMouseLeave={() => setHover(false)}
           x1={edgeList(50)[5][0]}
